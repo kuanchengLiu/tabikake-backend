@@ -1,0 +1,76 @@
+# =========================
+# Go build artifacts
+# =========================
+bin/
+build/
+dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+.claude/
+# Go coverage
+coverage.out
+coverage.html
+
+# =========================
+# Go modules / cache
+# =========================
+vendor/
+*.mod
+*.sum
+
+# (如果你用 go mod，通常不忽略 go.mod / go.sum)
+!go.mod
+!go.sum
+
+# =========================
+# Logs
+# =========================
+*.log
+logs/
+tmp/
+*.tmp
+
+# =========================
+# Environment files (重要)
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Database / local files
+# =========================
+*.db
+*.sqlite
+*.sqlite3
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# IDE / Editor
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# Test / debug
+# =========================
+*.coverprofile
+
+# =========================
+# Misc
+# =========================
+*.bak
+*.old
+*.backup
