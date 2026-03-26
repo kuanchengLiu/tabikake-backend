@@ -6,272 +6,295 @@
 	},
 	"item": [
 		{
-			"name": "Health Check",
-			"request": {
-				"method": "GET",
-				"header": [],
-				"url": {
-					"raw": "http://localhost:8080/health",
-					"protocol": "http",
-					"host": ["localhost"],
-					"port": "8080",
-					"path": ["health"]
-				}
-			}
-		},
-		{
-			"name": "POST /auth/notion/callback",
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "Content-Type",
-						"value": "application/json"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"code\": \"YOUR_NOTION_OAUTH_CODE\"\n}",
-					"options": {
-						"raw": {
-							"language": "json"
+			"name": "Health",
+			"item": [
+				{
+					"name": "GET /health",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/health",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["health"]
 						}
 					}
-				},
-				"url": {
-					"raw": "http://localhost:8080/auth/notion/callback",
-					"protocol": "http",
-					"host": ["localhost"],
-					"port": "8080",
-					"path": ["auth", "notion", "callback"]
 				}
-			}
+			]
 		},
 		{
-			"name": "GET /auth/me",
-			"request": {
-				"method": "GET",
-				"header": [
-					{
-						"key": "Authorization",
-						"value": "Bearer TOKEN_HERE"
-					}
-				],
-				"url": {
-					"raw": "http://localhost:8080/auth/me",
-					"protocol": "http",
-					"host": ["localhost"],
-					"port": "8080",
-					"path": ["auth", "me"]
-				}
-			}
-		},
-		{
-			"name": "GET /trips",
-			"request": {
-				"method": "GET",
-				"header": [
-					{
-						"key": "Authorization",
-						"value": "Bearer TOKEN_HERE"
-					}
-				],
-				"url": {
-					"raw": "http://localhost:8080/trips",
-					"protocol": "http",
-					"host": ["localhost"],
-					"port": "8080",
-					"path": ["trips"]
-				}
-			}
-		},
-		{
-			"name": "POST /trips",
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "Authorization",
-						"value": "Bearer TOKEN_HERE"
-					},
-					{
-						"key": "Content-Type",
-						"value": "application/json"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"name\": \"日本中部北陸之旅\",\n    \"start_date\": \"2026-03-20\",\n    \"end_date\": \"2026-03-30\",\n    \"budget_jpy\": 150000,\n    \"budget_suica\": 10000,\n    \"members\": []\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "http://localhost:8080/trips",
-					"protocol": "http",
-					"host": ["localhost"],
-					"port": "8080",
-					"path": ["trips"]
-				}
-			}
-		},
-		{
-			"name": "GET /trips/:id",
-			"request": {
-				"method": "GET",
-				"header": [
-					{
-						"key": "Authorization",
-						"value": "Bearer TOKEN_HERE"
-					}
-				],
-				"url": {
-					"raw": "http://localhost:8080/trips/TRIP_ID_HERE",
-					"protocol": "http",
-					"host": ["localhost"],
-					"port": "8080",
-					"path": ["trips", "TRIP_ID_HERE"]
-				}
-			}
-		},
-		{
-			"name": "POST /parse (base64)",
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "Authorization",
-						"value": "Bearer TOKEN_HERE"
-					},
-					{
-						"key": "Content-Type",
-						"value": "application/json"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"image_base64\": \"data:image/jpeg;base64,/9j/4AAQ...\"\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "http://localhost:8080/parse",
-					"protocol": "http",
-					"host": ["localhost"],
-					"port": "8080",
-					"path": ["parse"]
-				}
-			}
-		},
-		{
-			"name": "POST /parse (file upload)",
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "Authorization",
-						"value": "Bearer TOKEN_HERE"
-					}
-				],
-				"body": {
-					"mode": "formdata",
-					"formdata": [
+			"name": "Auth",
+			"item": [
+				{
+					"name": "POST /auth/notion/callback",
+					"event": [
 						{
-							"key": "image",
-							"type": "file",
-							"src": []
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"var res = pm.response.json();",
+									"if (res.access_token) {",
+									"  pm.collectionVariables.set('token', res.access_token);",
+									"  console.log('Token saved');",
+									"}"
+								]
+							}
 						}
-					]
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"code\": \"YOUR_NOTION_OAUTH_CODE\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "http://localhost:8080/auth/notion/callback",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["auth", "notion", "callback"]
+						}
+					}
 				},
-				"url": {
-					"raw": "http://localhost:8080/parse",
-					"protocol": "http",
-					"host": ["localhost"],
-					"port": "8080",
-					"path": ["parse"]
+				{
+					"name": "GET /auth/me",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": {
+							"raw": "http://localhost:8080/auth/me",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["auth", "me"]
+						}
+					}
 				}
-			}
+			]
 		},
 		{
-			"name": "GET /records",
-			"request": {
-				"method": "GET",
-				"header": [
-					{
-						"key": "Authorization",
-						"value": "Bearer TOKEN_HERE"
+			"name": "Trips",
+			"item": [
+				{
+					"name": "GET /trips",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": {
+							"raw": "http://localhost:8080/trips",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["trips"]
+						}
 					}
-				],
-				"url": {
-					"raw": "http://localhost:8080/records?trip_id=TRIP_ID_HERE",
-					"protocol": "http",
-					"host": ["localhost"],
-					"port": "8080",
-					"path": ["records"],
-					"query": [
+				},
+				{
+					"name": "POST /trips",
+					"event": [
 						{
-							"key": "trip_id",
-							"value": "TRIP_ID_HERE"
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"var res = pm.response.json();",
+									"if (res.id) {",
+									"  pm.collectionVariables.set('tripId', res.id);",
+									"  console.log('Trip ID saved:', res.id);",
+									"}"
+								]
+							}
 						}
-					]
-				}
-			}
-		},
-		{
-			"name": "POST /records",
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "Authorization",
-						"value": "Bearer TOKEN_HERE"
-					},
-					{
-						"key": "Content-Type",
-						"value": "application/json"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"store\": \"すき家\",\n    \"date\": \"2026-03-25\",\n    \"amount_jpy\": 650,\n    \"tax_jpy\": 59,\n    \"amount_twd\": 145,\n    \"category\": \"餐飲\",\n    \"payment\": \"現金\",\n    \"trip_id\": \"TRIP_ID_HERE\",\n    \"split_with\": [],\n    \"items\": [\n        { \"name_jp\": \"牛丼\", \"name_zh\": \"牛肉飯\", \"price\": 650 }\n    ]\n}",
-					"options": {
-						"raw": {
-							"language": "json"
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token}}" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"name\": \"日本中部北陸之旅\",\n\t\"start_date\": \"2026-03-20\",\n\t\"end_date\": \"2026-03-30\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "http://localhost:8080/trips",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["trips"]
 						}
 					}
 				},
-				"url": {
-					"raw": "http://localhost:8080/records",
-					"protocol": "http",
-					"host": ["localhost"],
-					"port": "8080",
-					"path": ["records"]
+				{
+					"name": "GET /trips/:id",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": {
+							"raw": "http://localhost:8080/trips/{{tripId}}",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["trips", "{{tripId}}"]
+						}
+					}
 				}
-			}
+			]
 		},
 		{
-			"name": "GET /dashboard/:trip_id",
-			"request": {
-				"method": "GET",
-				"header": [
-					{
-						"key": "Authorization",
-						"value": "Bearer TOKEN_HERE"
+			"name": "Parse",
+			"item": [
+				{
+					"name": "POST /parse (base64)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token}}" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"image_base64\": \"data:image/jpeg;base64,/9j/4AAQ...\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "http://localhost:8080/parse",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["parse"]
+						}
 					}
-				],
-				"url": {
-					"raw": "http://localhost:8080/dashboard/TRIP_ID_HERE",
-					"protocol": "http",
-					"host": ["localhost"],
-					"port": "8080",
-					"path": ["dashboard", "TRIP_ID_HERE"]
+				},
+				{
+					"name": "POST /parse (file upload)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{ "key": "image", "type": "file", "src": [] }
+							]
+						},
+						"url": {
+							"raw": "http://localhost:8080/parse",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["parse"]
+						}
+					}
 				}
-			}
+			]
+		},
+		{
+			"name": "Records",
+			"item": [
+				{
+					"name": "GET /records",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": {
+							"raw": "http://localhost:8080/records?trip_id={{tripId}}",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["records"],
+							"query": [
+								{ "key": "trip_id", "value": "{{tripId}}" }
+							]
+						}
+					}
+				},
+				{
+					"name": "POST /records",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token}}" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"trip_id\": \"{{tripId}}\",\n\t\"store\": \"すき家\",\n\t\"date\": \"2026-03-27\",\n\t\"amount_jpy\": 650,\n\t\"amount_twd\": 145,\n\t\"tax_jpy\": 59,\n\t\"category\": \"餐飲\",\n\t\"payment\": \"現金\",\n\t\"paid_by\": \"NOTION_USER_ID\",\n\t\"paid_by_name\": \"劉冠呈\",\n\t\"split_with\": [],\n\t\"items\": [\n\t\t{ \"name_jp\": \"牛丼\", \"name_zh\": \"牛肉飯\", \"price\": 650 }\n\t]\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "http://localhost:8080/records",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["records"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Dashboard",
+			"item": [
+				{
+					"name": "GET /dashboard/:trip_id",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": {
+							"raw": "http://localhost:8080/dashboard/{{tripId}}",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["dashboard", "{{tripId}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Split",
+			"item": [
+				{
+					"name": "POST /split/export/:trip_id",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": {
+							"raw": "http://localhost:8080/split/export/{{tripId}}",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["split", "export", "{{tripId}}"]
+						}
+					}
+				}
+			]
 		}
+	],
+	"variable": [
+		{ "key": "token", "value": "", "type": "string" },
+		{ "key": "tripId", "value": "", "type": "string" }
 	]
 }
