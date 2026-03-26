@@ -3,12 +3,16 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	_ "modernc.org/sqlite"
 
 	"github.com/yourname/tabikake/internal/model"
 )
+
+// ErrNotFound is returned when a requested record does not exist.
+var ErrNotFound = errors.New("not found")
 
 // DB wraps the SQLite connection.
 type DB struct {
@@ -93,6 +97,9 @@ type scanner interface {
 func scanTrip(s scanner) (*model.Trip, error) {
 	var t model.Trip
 	err := s.Scan(&t.ID, &t.Name, &t.StartDate, &t.EndDate, &t.NotionPageID, &t.NotionDbID, &t.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
 	if err != nil {
 		return nil, fmt.Errorf("scan trip: %w", err)
 	}

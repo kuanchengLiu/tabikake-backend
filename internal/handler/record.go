@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
 
+	appdb "github.com/yourname/tabikake/internal/db"
 	appmiddleware "github.com/yourname/tabikake/internal/middleware"
 	"github.com/yourname/tabikake/internal/model"
 	"github.com/yourname/tabikake/internal/service"
@@ -28,6 +30,9 @@ func (h *RecordHandler) ListRecords(c echo.Context) error {
 	}
 	records, err := h.recordSvc.ListRecords(c.Request().Context(), tripID)
 	if err != nil {
+		if errors.Is(err, appdb.ErrNotFound) {
+			return echo.NewHTTPError(http.StatusBadRequest, "trip not found")
+		}
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	if records == nil {
@@ -43,6 +48,13 @@ func (h *RecordHandler) CreateRecord(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 
+	if req.TripID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "trip_id is required")
+	}
+	if req.Store == "" || req.Date == "" || req.AmountJPY == 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "store, date, and amount_jpy are required")
+	}
+
 	user := appmiddleware.GetUser(c)
 	if user == nil {
 		return echo.NewHTTPError(http.StatusUnauthorized, "not authenticated")
@@ -54,12 +66,11 @@ func (h *RecordHandler) CreateRecord(c echo.Context) error {
 		req.PaidByName = user.UserName
 	}
 
-	if req.TripID == "" || req.Store == "" || req.Date == "" || req.AmountJPY == 0 {
-		return echo.NewHTTPError(http.StatusBadRequest, "trip_id, store, date, and amount_jpy are required")
-	}
-
 	record, err := h.recordSvc.CreateRecord(c.Request().Context(), req)
 	if err != nil {
+		if errors.Is(err, appdb.ErrNotFound) {
+			return echo.NewHTTPError(http.StatusBadRequest, "trip_id not found")
+		}
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	return c.JSON(http.StatusCreated, record)
