@@ -51,6 +51,8 @@ func main() {
 	recordSvc := service.NewRecordService(database, notionClient)
 	dashboardSvc := service.NewDashboardService(database, notionClient)
 	splitSvc := service.NewSplitService(database, notionClient, dashboardSvc)
+	memberSvc := service.NewMemberService(database)
+	settlementSvc := service.NewSettlementService(database, notionClient)
 
 	// Handlers
 	authHandler := handler.NewAuthHandler(authSvc)
@@ -59,6 +61,7 @@ func main() {
 	recordHandler := handler.NewRecordHandler(recordSvc)
 	dashboardHandler := handler.NewDashboardHandler(dashboardSvc)
 	splitHandler := handler.NewSplitHandler(splitSvc)
+	memberHandler := handler.NewMemberHandler(memberSvc, settlementSvc)
 
 	// Echo setup
 	e := echo.New()
@@ -91,6 +94,11 @@ func main() {
 	e.GET("/trips", tripHandler.ListTrips, auth)
 	e.POST("/trips", tripHandler.CreateTrip, auth)
 	e.GET("/trips/:id", tripHandler.GetTrip, auth)
+	e.GET("/trips/:id/members", memberHandler.ListMembers, auth)
+	e.POST("/trips/:id/members", memberHandler.AddMember, auth)
+	e.DELETE("/trips/:id/members/:member_id", memberHandler.DeleteMember, auth)
+	e.GET("/trips/:id/settlement", memberHandler.GetSettlement, auth)
+	e.POST("/trips/join", memberHandler.JoinTrip, auth)
 
 	e.POST("/parse", parseHandler.ParseReceipt, auth)
 

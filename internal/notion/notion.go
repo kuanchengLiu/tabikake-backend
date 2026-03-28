@@ -92,6 +92,9 @@ func (c *Client) CreateRecordsDatabase(ctx context.Context, parentPageID string)
 			"PaidByName": notionapi.RichTextPropertyConfig{
 				Type: "rich_text", RichText: struct{}{},
 			},
+			"PaidByMemberID": notionapi.RichTextPropertyConfig{
+				Type: "rich_text", RichText: struct{}{},
+			},
 			"SplitWith": notionapi.RichTextPropertyConfig{
 				Type: "rich_text", RichText: struct{}{},
 			},
@@ -146,8 +149,9 @@ func (c *Client) CreateRecord(ctx context.Context, dbID string, req model.Create
 		"Payment":    notionapi.SelectProperty{Select: notionapi.Option{Name: req.Payment}},
 		"PaidBy":     notionapi.RichTextProperty{RichText: []notionapi.RichText{{Text: &notionapi.Text{Content: req.PaidBy}}}},
 		"PaidByName": notionapi.RichTextProperty{RichText: []notionapi.RichText{{Text: &notionapi.Text{Content: req.PaidByName}}}},
-		"SplitWith":  notionapi.RichTextProperty{RichText: []notionapi.RichText{{Text: &notionapi.Text{Content: string(splitWithJSON)}}}},
-		"Items":      notionapi.RichTextProperty{RichText: []notionapi.RichText{{Text: &notionapi.Text{Content: string(itemsJSON)}}}},
+		"PaidByMemberID": notionapi.RichTextProperty{RichText: []notionapi.RichText{{Text: &notionapi.Text{Content: req.PaidByMemberID}}}},
+		"SplitWith":      notionapi.RichTextProperty{RichText: []notionapi.RichText{{Text: &notionapi.Text{Content: string(splitWithJSON)}}}},
+		"Items":          notionapi.RichTextProperty{RichText: []notionapi.RichText{{Text: &notionapi.Text{Content: string(itemsJSON)}}}},
 	}
 
 	page, err := c.api.Page.Create(ctx, &notionapi.PageCreateRequest{
@@ -306,6 +310,9 @@ func pageToRecord(page notionapi.Page) (model.Record, error) {
 	}
 	if p, ok := props["PaidByName"].(*notionapi.RichTextProperty); ok && len(p.RichText) > 0 {
 		rec.PaidByName = p.RichText[0].PlainText
+	}
+	if p, ok := props["PaidByMemberID"].(*notionapi.RichTextProperty); ok && len(p.RichText) > 0 {
+		rec.PaidByMemberID = p.RichText[0].PlainText
 	}
 	if p, ok := props["SplitWith"].(*notionapi.RichTextProperty); ok && len(p.RichText) > 0 {
 		_ = json.Unmarshal([]byte(p.RichText[0].PlainText), &rec.SplitWith)

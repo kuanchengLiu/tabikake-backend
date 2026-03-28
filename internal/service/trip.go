@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"math/big"
 
 	"github.com/yourname/tabikake/internal/db"
 	"github.com/yourname/tabikake/internal/model"
@@ -12,7 +13,6 @@ import (
 )
 
 // TripService handles trip creation and retrieval.
-// Trips are persisted in SQLite; their Notion pages/databases are created on demand.
 type TripService struct {
 	db     *db.DB
 	notion *notion.Client
@@ -36,7 +36,7 @@ func (s *TripService) GetTrip(ctx context.Context, id string) (*model.Trip, erro
 // CreateTrip:
 //  1. Creates a Notion page under NOTION_ROOT_PAGE_ID
 //  2. Creates a Records database under that page
-//  3. Saves the trip metadata to SQLite
+//  3. Saves the trip metadata to SQLite (with auto-generated invite code)
 func (s *TripService) CreateTrip(ctx context.Context, req model.CreateTripRequest) (*model.Trip, error) {
 	pageID, err := s.notion.CreateTripPage(ctx, req.Name)
 	if err != nil {
@@ -53,6 +53,11 @@ func (s *TripService) CreateTrip(ctx context.Context, req model.CreateTripReques
 		return nil, err
 	}
 
+	inviteCode, err := newInviteCode()
+	if err != nil {
+		return nil, err
+	}
+
 	trip := model.Trip{
 		ID:           id,
 		Name:         req.Name,
@@ -60,6 +65,7 @@ func (s *TripService) CreateTrip(ctx context.Context, req model.CreateTripReques
 		EndDate:      req.EndDate,
 		NotionPageID: pageID,
 		NotionDbID:   dbID,
+		InviteCode:   inviteCode,
 	}
 
 	if err := s.db.InsertTrip(ctx, trip); err != nil {
@@ -75,4 +81,18 @@ func newID() (string, error) {
 		return "", fmt.Errorf("generate id: %w", err)
 	}
 	return hex.EncodeToString(b), nil
+}
+
+const inviteChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+func newInviteCode() (string, error) {
+	code := make([]byte, 6)
+	for i := range code {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(inviteChars))))
+		if err != nil {
+			return "", fmt.Errorf("generate invite code: %w", err)
+		}
+		code[i] = inviteChars[n.Int64()]
+	}
+	return string(code), nil
 }
