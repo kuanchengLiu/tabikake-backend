@@ -169,6 +169,79 @@ func (c *Client) CreateRecord(ctx context.Context, dbID string, req model.Create
 	return &rec, nil
 }
 
+// UpdateRecord updates an existing expense record page in Notion.
+// Only non-nil fields in req are written; nil fields are left unchanged.
+func (c *Client) UpdateRecord(ctx context.Context, pageID string, req model.UpdateRecordRequest) (*model.Record, error) {
+	props := notionapi.Properties{}
+
+	if req.Store != nil {
+		props["Store"] = notionapi.TitleProperty{
+			Title: []notionapi.RichText{{Text: &notionapi.Text{Content: *req.Store}}},
+		}
+	}
+	if req.Date != nil {
+		props["Date"] = notionapi.DateProperty{
+			Date: &notionapi.DateObject{Start: toNotionDate(*req.Date)},
+		}
+	}
+	if req.AmountJPY != nil {
+		props["Amount_JPY"] = notionapi.NumberProperty{Number: *req.AmountJPY}
+	}
+	if req.AmountTWD != nil {
+		props["Amount_TWD"] = notionapi.NumberProperty{Number: *req.AmountTWD}
+	}
+	if req.TaxJPY != nil {
+		props["Tax_JPY"] = notionapi.NumberProperty{Number: *req.TaxJPY}
+	}
+	if req.Category != nil {
+		props["Category"] = notionapi.SelectProperty{Select: notionapi.Option{Name: *req.Category}}
+	}
+	if req.Payment != nil {
+		props["Payment"] = notionapi.SelectProperty{Select: notionapi.Option{Name: *req.Payment}}
+	}
+	if req.PaidBy != nil {
+		props["PaidBy"] = notionapi.RichTextProperty{RichText: []notionapi.RichText{{Text: &notionapi.Text{Content: *req.PaidBy}}}}
+	}
+	if req.PaidByName != nil {
+		props["PaidByName"] = notionapi.RichTextProperty{RichText: []notionapi.RichText{{Text: &notionapi.Text{Content: *req.PaidByName}}}}
+	}
+	if req.PaidByMemberID != nil {
+		props["PaidByMemberID"] = notionapi.RichTextProperty{RichText: []notionapi.RichText{{Text: &notionapi.Text{Content: *req.PaidByMemberID}}}}
+	}
+	if req.SplitWith != nil {
+		b, _ := json.Marshal(req.SplitWith)
+		props["SplitWith"] = notionapi.RichTextProperty{RichText: []notionapi.RichText{{Text: &notionapi.Text{Content: string(b)}}}}
+	}
+	if req.Items != nil {
+		b, _ := json.Marshal(req.Items)
+		props["Items"] = notionapi.RichTextProperty{RichText: []notionapi.RichText{{Text: &notionapi.Text{Content: string(b)}}}}
+	}
+
+	page, err := c.api.Page.Update(ctx, notionapi.PageID(pageID), &notionapi.PageUpdateRequest{
+		Properties: props,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("notion update record: %w", err)
+	}
+
+	rec, err := pageToRecord(*page)
+	if err != nil {
+		return nil, err
+	}
+	return &rec, nil
+}
+
+// DeleteRecord archives a Notion page (moves it to trash).
+func (c *Client) DeleteRecord(ctx context.Context, pageID string) error {
+	_, err := c.api.Page.Update(ctx, notionapi.PageID(pageID), &notionapi.PageUpdateRequest{
+		Archived: true,
+	})
+	if err != nil {
+		return fmt.Errorf("notion delete record: %w", err)
+	}
+	return nil
+}
+
 // --- Settlement export ---
 
 // SettlementData holds the data needed to render the settlement page.

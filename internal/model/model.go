@@ -38,9 +38,30 @@ type Trip struct {
 
 // CreateTripRequest is the request body for POST /trips.
 type CreateTripRequest struct {
-	Name      string `json:"name"`
-	StartDate string `json:"start_date"`
-	EndDate   string `json:"end_date"`
+	Name             string `json:"name"`
+	StartDate        string `json:"start_date"`
+	EndDate          string `json:"end_date"`
+	OwnerName        string `json:"owner_name"`
+	OwnerAvatarColor string `json:"owner_avatar_color"`
+}
+
+// CreateTripResponse is returned after POST /trips, including the auto-created owner member.
+type CreateTripResponse struct {
+	Trip  Trip   `json:"trip"`
+	Owner Member `json:"owner"`
+}
+
+// TripDetailResponse is returned by GET /trips/:id and includes membership status.
+type TripDetailResponse struct {
+	Trip
+	IsMember bool `json:"is_member"`
+}
+
+// JoinInfoResponse is returned by GET /trips/join-info?code= (public endpoint).
+type JoinInfoResponse struct {
+	TripName    string `json:"trip_name"`
+	MemberCount int    `json:"member_count"`
+	OwnerName   string `json:"owner_name"`
 }
 
 // --- Member ---
@@ -85,38 +106,55 @@ type RecordItem struct {
 
 // Record represents an expense record stored in a trip's Notion Records database.
 type Record struct {
-	ID              string      `json:"id"`
-	Store           string      `json:"store"`
-	Date            string      `json:"date"`
-	AmountJPY       float64     `json:"amount_jpy"`
-	AmountTWD       float64     `json:"amount_twd"`
-	TaxJPY          float64     `json:"tax_jpy"`
-	Category        string      `json:"category"`
-	Payment         string      `json:"payment"`
-	PaidBy          string      `json:"paid_by"`
-	PaidByName      string      `json:"paid_by_name"`
-	PaidByMemberID  string      `json:"paid_by_member_id,omitempty"`
-	PaidByMember    *Member     `json:"paid_by_member,omitempty"`
-	SplitWith       []string    `json:"split_with"`
-	Items           []RecordItem `json:"items"`
+	ID             string       `json:"id"`
+	Store          string       `json:"store"`
+	Date           string       `json:"date"`
+	AmountJPY      float64      `json:"amount_jpy"`
+	AmountTWD      float64      `json:"amount_twd"`
+	TaxJPY         float64      `json:"tax_jpy"`
+	Category       string       `json:"category"`
+	Payment        string       `json:"payment"`
+	PaidBy         string       `json:"paid_by"`
+	PaidByName     string       `json:"paid_by_name"`
+	PaidByMemberID string       `json:"paid_by_member_id,omitempty"`
+	PaidByMember   *Member      `json:"paid_by_member,omitempty"`
+	SplitWith      []string     `json:"split_with"`
+	Items          []RecordItem `json:"items"`
 }
 
 // CreateRecordRequest is the request body for POST /records.
 type CreateRecordRequest struct {
-	TripID          string       `json:"trip_id"`
-	Store           string       `json:"store"`
-	Date            string       `json:"date"`
-	AmountJPY       float64      `json:"amount_jpy"`
-	AmountTWD       float64      `json:"amount_twd"`
-	TaxJPY          float64      `json:"tax_jpy"`
-	Category        string       `json:"category"`
-	Payment         string       `json:"payment"`
-	PaidBy          string       `json:"paid_by"`
-	PaidByName      string       `json:"paid_by_name"`
-	PaidByMemberID  string       `json:"paid_by_member_id"`
-	SplitWith       []string     `json:"split_with"`
-	Items           []RecordItem `json:"items"`
-	ImageBase64     string       `json:"image_base64,omitempty"`
+	TripID         string       `json:"trip_id"`
+	Store          string       `json:"store"`
+	Date           string       `json:"date"`
+	AmountJPY      float64      `json:"amount_jpy"`
+	AmountTWD      float64      `json:"amount_twd"`
+	TaxJPY         float64      `json:"tax_jpy"`
+	Category       string       `json:"category"`
+	Payment        string       `json:"payment"`
+	PaidBy         string       `json:"paid_by"`
+	PaidByName     string       `json:"paid_by_name"`
+	PaidByMemberID string       `json:"paid_by_member_id"`
+	SplitWith      []string     `json:"split_with"`
+	Items          []RecordItem `json:"items"`
+	ImageBase64    string       `json:"image_base64,omitempty"`
+}
+
+// UpdateRecordRequest is the request body for PATCH /records/:id.
+// All fields are optional; only non-nil fields are written to Notion.
+type UpdateRecordRequest struct {
+	Store          *string      `json:"store"`
+	Date           *string      `json:"date"`
+	AmountJPY      *float64     `json:"amount_jpy"`
+	AmountTWD      *float64     `json:"amount_twd"`
+	TaxJPY         *float64     `json:"tax_jpy"`
+	Category       *string      `json:"category"`
+	Payment        *string      `json:"payment"`
+	PaidBy         *string      `json:"paid_by"`
+	PaidByName     *string      `json:"paid_by_name"`
+	PaidByMemberID *string      `json:"paid_by_member_id"`
+	SplitWith      []string     `json:"split_with"`
+	Items          []RecordItem `json:"items"`
 }
 
 // Category options
@@ -158,7 +196,7 @@ type MemberBalance struct {
 	UserName  string  `json:"user_name"`
 	TotalPaid float64 `json:"total_paid"`
 	ShouldPay float64 `json:"should_pay"`
-	Balance   float64 `json:"balance"` // positive = others owe them; negative = they owe others
+	Balance   float64 `json:"balance"`
 }
 
 // Settlement represents a single transfer needed to settle debts (dashboard/split export).
@@ -192,7 +230,7 @@ type MemberSummary struct {
 	Member  Member `json:"member"`
 	PaidJPY int64  `json:"paid_jpy"`
 	OweJPY  int64  `json:"owe_jpy"`
-	DiffJPY int64  `json:"diff_jpy"` // positive = others owe them; negative = they owe others
+	DiffJPY int64  `json:"diff_jpy"`
 }
 
 // MemberSettlement represents a single transfer between registered members.

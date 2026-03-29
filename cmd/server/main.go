@@ -80,34 +80,44 @@ func main() {
 		_ = c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": "internal server error"})
 	}
 
+	// Middleware factories
+	auth := appmiddleware.JWTAuth(cfg.JWTSecret)
+	memberOf := func(paramName string) echo.MiddlewareFunc {
+		return appmiddleware.ValidateTripMember(database, paramName)
+	}
+
 	// Public
 	e.GET("/health", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
 	e.POST("/auth/notion/callback", authHandler.NotionCallback)
+	e.GET("/trips/join-info", tripHandler.GetJoinInfo) // public: show trip info before joining
 
-	// Protected
-	auth := appmiddleware.JWTAuth(cfg.JWTSecret)
-
+	// Protected — JWT only
 	e.GET("/auth/me", authHandler.Me, auth)
 
 	e.GET("/trips", tripHandler.ListTrips, auth)
 	e.POST("/trips", tripHandler.CreateTrip, auth)
-	e.GET("/trips/:id", tripHandler.GetTrip, auth)
-	e.GET("/trips/:id/members", memberHandler.ListMembers, auth)
-	e.POST("/trips/:id/members", memberHandler.AddMember, auth)
-	e.DELETE("/trips/:id/members/:member_id", memberHandler.DeleteMember, auth)
-	e.GET("/trips/:id/settlement", memberHandler.GetSettlement, auth)
-	e.POST("/trips/join", memberHandler.JoinTrip, auth)
+	e.GET("/trips/:id", tripHandler.GetTrip, auth)         // is_member populated via X-Member-ID header
+	e.POST("/trips/join", memberHandler.JoinTrip, auth)    // join via invite code → creates member
 
 	e.POST("/parse", parseHandler.ParseReceipt, auth)
 
-	e.GET("/records", recordHandler.ListRecords, auth)
-	e.POST("/records", recordHandler.CreateRecord, auth)
+	e.PATCH("/records/:id", recordHandler.UpdateRecord, auth)
+	e.DELETE("/records/:id", recordHandler.DeleteRecord, auth)
 
-	e.GET("/dashboard/:trip_id", dashboardHandler.GetDashboard, auth)
+	// Protected — JWT + must be a trip member (X-Member-ID)
+	e.GET("/trips/:id/members", memberHandler.ListMembers, auth, memberOf("id"))
+	e.POST("/trips/:id/members", memberHandler.AddMember, auth, memberOf("id"))
+	e.DELETE("/trips/:id/members/:member_id", memberHandler.DeleteMember, auth) // owner check inside handler
+	e.GET("/trips/:id/settlement", memberHandler.GetSettlement, auth, memberOf("id"))
 
-	e.POST("/split/export/:trip_id", splitHandler.ExportSettlement, auth)
+	e.GET("/records", recordHandler.ListRecords, auth, memberOf(""))        // trip_id from query param
+	e.POST("/records", recordHandler.CreateRecord, auth)                    // member validated in service
+
+	e.GET("/dashboard/:trip_id", dashboardHandler.GetDashboard, auth, memberOf("trip_id"))
+
+	e.POST("/split/export/:trip_id", splitHandler.ExportSettlement, auth, memberOf("trip_id"))
 
 	// Graceful shutdown
 	addr := fmt.Sprintf(":%s", cfg.Port)

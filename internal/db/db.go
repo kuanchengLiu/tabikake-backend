@@ -162,6 +162,30 @@ func (d *DB) ListMembers(ctx context.Context, tripID string) ([]model.Member, er
 	return members, rows.Err()
 }
 
+// IsMember returns true if memberID belongs to the given trip.
+func (d *DB) IsMember(ctx context.Context, tripID, memberID string) (bool, error) {
+	var count int
+	err := d.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM members WHERE trip_id = ? AND id = ?`, tripID, memberID).Scan(&count)
+	return count > 0, err
+}
+
+// GetTripOwner returns the owner member of a trip.
+func (d *DB) GetTripOwner(ctx context.Context, tripID string) (*model.Member, error) {
+	row := d.QueryRowContext(ctx,
+		`SELECT id, trip_id, name, avatar_color, is_owner, created_at
+		 FROM members WHERE trip_id = ? AND is_owner = 1 LIMIT 1`, tripID)
+	return scanMember(row)
+}
+
+// CountMembers returns the number of members in a trip.
+func (d *DB) CountMembers(ctx context.Context, tripID string) (int, error) {
+	var count int
+	err := d.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM members WHERE trip_id = ?`, tripID).Scan(&count)
+	return count, err
+}
+
 // DeleteMember removes a member by ID.
 func (d *DB) DeleteMember(ctx context.Context, id string) error {
 	res, err := d.ExecContext(ctx, `DELETE FROM members WHERE id = ?`, id)

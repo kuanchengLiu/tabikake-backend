@@ -71,7 +71,42 @@ func (h *RecordHandler) CreateRecord(c echo.Context) error {
 		if errors.Is(err, appdb.ErrNotFound) {
 			return echo.NewHTTPError(http.StatusBadRequest, "trip_id not found")
 		}
+		if service.IsMemberValidationError(err) {
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	return c.JSON(http.StatusCreated, record)
+}
+
+// UpdateRecord handles PATCH /records/:id
+func (h *RecordHandler) UpdateRecord(c echo.Context) error {
+	pageID := c.Param("id")
+	if pageID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "record id is required")
+	}
+
+	var req model.UpdateRecordRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+
+	record, err := h.recordSvc.UpdateRecord(c.Request().Context(), pageID, req)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(http.StatusOK, record)
+}
+
+// DeleteRecord handles DELETE /records/:id
+func (h *RecordHandler) DeleteRecord(c echo.Context) error {
+	pageID := c.Param("id")
+	if pageID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "record id is required")
+	}
+
+	if err := h.recordSvc.DeleteRecord(c.Request().Context(), pageID); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(http.StatusOK, map[string]bool{"success": true})
 }

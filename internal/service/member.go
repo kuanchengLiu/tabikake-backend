@@ -96,6 +96,15 @@ func (s *MemberService) JoinTrip(ctx context.Context, req model.JoinTripRequest)
 	return &model.JoinTripResponse{Trip: *trip, Member: m}, nil
 }
 
+// IsOwner returns true if memberID is the owner of the given trip.
+func (s *MemberService) IsOwner(ctx context.Context, tripID, memberID string) (bool, error) {
+	m, err := s.db.GetMember(ctx, memberID)
+	if err != nil {
+		return false, err
+	}
+	return m.TripID == tripID && m.IsOwner, nil
+}
+
 // DeleteMember removes a member from a trip (owner only — authorization checked in handler).
 func (s *MemberService) DeleteMember(ctx context.Context, tripID, memberID string) error {
 	m, err := s.db.GetMember(ctx, memberID)

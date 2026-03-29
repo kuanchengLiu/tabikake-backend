@@ -109,9 +109,17 @@
 								"type": "text/javascript",
 								"exec": [
 									"var res = pm.response.json();",
-									"if (res.id) {",
-									"  pm.collectionVariables.set('tripId', res.id);",
-									"  console.log('Trip ID saved:', res.id);",
+									"if (res.trip && res.trip.id) {",
+									"  pm.collectionVariables.set('tripId', res.trip.id);",
+									"  console.log('Trip ID saved:', res.trip.id);",
+									"}",
+									"if (res.trip && res.trip.invite_code) {",
+									"  pm.collectionVariables.set('inviteCode', res.trip.invite_code);",
+									"  console.log('Invite code saved:', res.trip.invite_code);",
+									"}",
+									"if (res.owner && res.owner.id) {",
+									"  pm.collectionVariables.set('memberId', res.owner.id);",
+									"  console.log('Owner member ID saved:', res.owner.id);",
 									"}"
 								]
 							}
@@ -125,7 +133,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n\t\"name\": \"日本中部北陸之旅\",\n\t\"start_date\": \"2026-03-20\",\n\t\"end_date\": \"2026-03-30\"\n}",
+							"raw": "{\n\t\"name\": \"日本中部北陸之旅\",\n\t\"start_date\": \"2026-03-20\",\n\t\"end_date\": \"2026-03-30\",\n\t\"owner_name\": \"劉冠呈\",\n\t\"owner_avatar_color\": \"#F59E0B\"\n}",
 							"options": { "raw": { "language": "json" } }
 						},
 						"url": {
@@ -142,7 +150,8 @@
 					"request": {
 						"method": "GET",
 						"header": [
-							{ "key": "Authorization", "value": "Bearer {{token}}" }
+							{ "key": "Authorization", "value": "Bearer {{token}}" },
+							{ "key": "X-Member-ID", "value": "{{memberId}}", "description": "optional — populates is_member field" }
 						],
 						"url": {
 							"raw": "http://localhost:8080/trips/{{tripId}}",
@@ -150,6 +159,158 @@
 							"host": ["localhost"],
 							"port": "8080",
 							"path": ["trips", "{{tripId}}"]
+						}
+					}
+				},
+				{
+					"name": "GET /trips/join-info (public)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/trips/join-info?code={{inviteCode}}",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["trips", "join-info"],
+							"query": [
+								{ "key": "code", "value": "{{inviteCode}}" }
+							]
+						}
+					}
+				},
+				{
+					"name": "POST /trips/join",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"var res = pm.response.json();",
+									"if (res.trip && res.trip.id) {",
+									"  pm.collectionVariables.set('tripId', res.trip.id);",
+									"  console.log('Trip ID saved:', res.trip.id);",
+									"}",
+									"if (res.member && res.member.id) {",
+									"  pm.collectionVariables.set('memberId', res.member.id);",
+									"  console.log('Member ID saved:', res.member.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token}}" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"invite_code\": \"{{inviteCode}}\",\n\t\"name\": \"陳小明\",\n\t\"avatar_color\": \"#10B981\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "http://localhost:8080/trips/join",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["trips", "join"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Members",
+			"item": [
+				{
+					"name": "GET /trips/:id/members",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token}}" },
+							{ "key": "X-Member-ID", "value": "{{memberId}}" }
+						],
+						"url": {
+							"raw": "http://localhost:8080/trips/{{tripId}}/members",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["trips", "{{tripId}}", "members"]
+						}
+					}
+				},
+				{
+					"name": "POST /trips/:id/members",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"var res = pm.response.json();",
+									"if (res.id) {",
+									"  pm.collectionVariables.set('newMemberId', res.id);",
+									"  console.log('New member ID saved:', res.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token}}" },
+							{ "key": "X-Member-ID", "value": "{{memberId}}" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"name\": \"王小美\",\n\t\"avatar_color\": \"#6366F1\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "http://localhost:8080/trips/{{tripId}}/members",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["trips", "{{tripId}}", "members"]
+						}
+					}
+				},
+				{
+					"name": "DELETE /trips/:id/members/:member_id",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token}}" },
+							{ "key": "X-Member-ID", "value": "{{memberId}}", "description": "must be trip owner" }
+						],
+						"url": {
+							"raw": "http://localhost:8080/trips/{{tripId}}/members/{{newMemberId}}",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["trips", "{{tripId}}", "members", "{{newMemberId}}"]
+						}
+					}
+				},
+				{
+					"name": "GET /trips/:id/settlement",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token}}" },
+							{ "key": "X-Member-ID", "value": "{{memberId}}" }
+						],
+						"url": {
+							"raw": "http://localhost:8080/trips/{{tripId}}/settlement",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["trips", "{{tripId}}", "settlement"]
 						}
 					}
 				}
@@ -212,7 +373,8 @@
 					"request": {
 						"method": "GET",
 						"header": [
-							{ "key": "Authorization", "value": "Bearer {{token}}" }
+							{ "key": "Authorization", "value": "Bearer {{token}}" },
+							{ "key": "X-Member-ID", "value": "{{memberId}}" }
 						],
 						"url": {
 							"raw": "http://localhost:8080/records?trip_id={{tripId}}",
@@ -228,6 +390,21 @@
 				},
 				{
 					"name": "POST /records",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"var res = pm.response.json();",
+									"if (res.id) {",
+									"  pm.collectionVariables.set('recordId', res.id);",
+									"  console.log('Record ID saved:', res.id);",
+									"}"
+								]
+							}
+						}
+					],
 					"request": {
 						"method": "POST",
 						"header": [
@@ -236,7 +413,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n\t\"trip_id\": \"{{tripId}}\",\n\t\"store\": \"すき家\",\n\t\"date\": \"2026-03-27\",\n\t\"amount_jpy\": 650,\n\t\"amount_twd\": 145,\n\t\"tax_jpy\": 59,\n\t\"category\": \"餐飲\",\n\t\"payment\": \"現金\",\n\t\"paid_by\": \"NOTION_USER_ID\",\n\t\"paid_by_name\": \"劉冠呈\",\n\t\"split_with\": [],\n\t\"items\": [\n\t\t{ \"name_jp\": \"牛丼\", \"name_zh\": \"牛肉飯\", \"price\": 650 }\n\t]\n}",
+							"raw": "{\n\t\"trip_id\": \"{{tripId}}\",\n\t\"store\": \"すき家\",\n\t\"date\": \"2026-03-27\",\n\t\"amount_jpy\": 650,\n\t\"amount_twd\": 145,\n\t\"tax_jpy\": 59,\n\t\"category\": \"餐飲\",\n\t\"payment\": \"現金\",\n\t\"paid_by_member_id\": \"{{memberId}}\",\n\t\"split_with\": [\"{{memberId}}\"],\n\t\"items\": [\n\t\t{ \"name_jp\": \"牛丼\", \"name_zh\": \"牛肉飯\", \"price\": 650 }\n\t]\n}",
 							"options": { "raw": { "language": "json" } }
 						},
 						"url": {
@@ -245,6 +422,44 @@
 							"host": ["localhost"],
 							"port": "8080",
 							"path": ["records"]
+						}
+					}
+				},
+				{
+					"name": "PATCH /records/:id",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token}}" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"amount_jpy\": 720,\n\t\"tax_jpy\": 65,\n\t\"items\": [\n\t\t{ \"name_jp\": \"牛丼(並)\", \"name_zh\": \"牛肉飯(普通)\", \"price\": 720 }\n\t]\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "http://localhost:8080/records/{{recordId}}",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["records", "{{recordId}}"]
+						}
+					}
+				},
+				{
+					"name": "DELETE /records/:id",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": {
+							"raw": "http://localhost:8080/records/{{recordId}}",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["records", "{{recordId}}"]
 						}
 					}
 				}
@@ -258,7 +473,8 @@
 					"request": {
 						"method": "GET",
 						"header": [
-							{ "key": "Authorization", "value": "Bearer {{token}}" }
+							{ "key": "Authorization", "value": "Bearer {{token}}" },
+							{ "key": "X-Member-ID", "value": "{{memberId}}" }
 						],
 						"url": {
 							"raw": "http://localhost:8080/dashboard/{{tripId}}",
@@ -279,7 +495,8 @@
 					"request": {
 						"method": "POST",
 						"header": [
-							{ "key": "Authorization", "value": "Bearer {{token}}" }
+							{ "key": "Authorization", "value": "Bearer {{token}}" },
+							{ "key": "X-Member-ID", "value": "{{memberId}}" }
 						],
 						"url": {
 							"raw": "http://localhost:8080/split/export/{{tripId}}",
@@ -294,7 +511,11 @@
 		}
 	],
 	"variable": [
-		{ "key": "token", "value": "", "type": "string" },
-		{ "key": "tripId", "value": "", "type": "string" }
+		{ "key": "token",       "value": "", "type": "string" },
+		{ "key": "tripId",      "value": "", "type": "string" },
+		{ "key": "inviteCode",  "value": "", "type": "string" },
+		{ "key": "memberId",    "value": "", "type": "string" },
+		{ "key": "newMemberId", "value": "", "type": "string" },
+		{ "key": "recordId",    "value": "", "type": "string" }
 	]
 }

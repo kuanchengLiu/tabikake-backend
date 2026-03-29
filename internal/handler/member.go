@@ -7,6 +7,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	appdb "github.com/yourname/tabikake/internal/db"
+	appmiddleware "github.com/yourname/tabikake/internal/middleware"
 	"github.com/yourname/tabikake/internal/model"
 	"github.com/yourname/tabikake/internal/service"
 )
@@ -81,12 +82,25 @@ func (h *MemberHandler) JoinTrip(c echo.Context) error {
 }
 
 // DeleteMember handles DELETE /trips/:id/members/:member_id
+// Requires the requester (X-Member-ID) to be the trip owner.
 func (h *MemberHandler) DeleteMember(c echo.Context) error {
 	tripID := c.Param("id")
 	memberID := c.Param("member_id")
 
-	err := h.memberSvc.DeleteMember(c.Request().Context(), tripID, memberID)
+	// Only the owner may remove members.
+	requesterID := appmiddleware.GetMemberID(c)
+	if requesterID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "X-Member-ID header is required")
+	}
+	isOwner, err := h.memberSvc.IsOwner(c.Request().Context(), tripID, requesterID)
 	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	if !isOwner {
+		return echo.NewHTTPError(http.StatusForbidden, "only the trip owner can remove members")
+	}
+
+	if err := h.memberSvc.DeleteMember(c.Request().Context(), tripID, memberID); err != nil {
 		if errors.Is(err, appdb.ErrNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "member not found")
 		}

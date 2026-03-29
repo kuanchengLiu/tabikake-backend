@@ -7,6 +7,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 
+	appdb "github.com/yourname/tabikake/internal/db"
 	"github.com/yourname/tabikake/internal/model"
 )
 
@@ -67,3 +68,48 @@ func (j *jwtClaimsAdapter) GetNotBefore() (*jwt.NumericDate, error)      { retur
 func (j *jwtClaimsAdapter) GetIssuer() (string, error)                   { return "", nil }
 func (j *jwtClaimsAdapter) GetSubject() (string, error)                  { return j.UserID, nil }
 func (j *jwtClaimsAdapter) GetAudience() (jwt.ClaimStrings, error)       { return nil, nil }
+
+const memberIDContextKey = "memberID"
+
+// ValidateTripMember returns middleware that verifies the X-Member-ID header
+// belongs to the trip extracted from the route/query params.
+// tripParamName: Echo route param name (e.g. "id", "trip_id").
+// If empty, falls back to query param "trip_id".
+func ValidateTripMember(database *appdb.DB, tripParamName string) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			memberID := c.Request().Header.Get("X-Member-ID")
+			if memberID == "" {
+				return echo.NewHTTPError(http.StatusBadRequest, "X-Member-ID header is required")
+			}
+
+			tripID := c.Param(tripParamName)
+			if tripID == "" {
+				tripID = c.QueryParam("trip_id")
+			}
+			if tripID == "" {
+				return echo.NewHTTPError(http.StatusBadRequest, "trip ID not found in request")
+			}
+
+			ok, err := database.IsMember(c.Request().Context(), tripID, memberID)
+			if err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			}
+			if !ok {
+				return echo.NewHTTPError(http.StatusForbidden, "not a member of this trip")
+			}
+
+			c.Set(memberIDContextKey, memberID)
+			return next(c)
+		}
+	}
+}
+
+// GetMemberID extracts the member ID set by ValidateTripMember, or reads the
+// X-Member-ID header directly (for routes where the middleware is optional).
+func GetMemberID(c echo.Context) string {
+	if v, ok := c.Get(memberIDContextKey).(string); ok && v != "" {
+		return v
+	}
+	return c.Request().Header.Get("X-Member-ID")
+}
