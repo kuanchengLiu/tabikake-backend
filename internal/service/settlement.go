@@ -5,140 +5,200 @@ import (
 	"fmt"
 	"sort"
 
-	appdb "github.com/yourname/tabikake/internal/db"
 	"github.com/yourname/tabikake/internal/model"
 	"github.com/yourname/tabikake/internal/notion"
+	"github.com/yourname/tabikake/internal/store"
 )
 
-// SettlementService calculates member-based trip settlements.
+// SettlementService calculates and exports trip settlements.
 type SettlementService struct {
-	db     *appdb.DB
+	db     *store.DB
 	notion *notion.Client
 }
 
 // NewSettlementService creates a new SettlementService.
-func NewSettlementService(database *appdb.DB, notionClient *notion.Client) *SettlementService {
-	return &SettlementService{db: database, notion: notionClient}
+func NewSettlementService(db *store.DB, notionClient *notion.Client) *SettlementService {
+	return &SettlementService{db: db, notion: notionClient}
 }
 
-// GetSettlement computes per-member balances and the minimum transfers needed.
-func (s *SettlementService) GetSettlement(ctx context.Context, tripID string) (*model.SettlementResult, error) {
+// Calculate returns settlement results without writing to Notion.
+func (s *SettlementService) Calculate(ctx context.Context, tripID string) (*model.SettlementResult, error) {
 	trip, err := s.db.GetTrip(ctx, tripID)
 	if err != nil {
 		return nil, fmt.Errorf("get trip: %w", err)
 	}
 
+	records, err := s.notion.ListRecords(ctx, trip.NotionDbID)
+	if err != nil {
+		return nil, err
+	}
+
 	members, err := s.db.ListMembers(ctx, tripID)
 	if err != nil {
-		return nil, fmt.Errorf("list members: %w", err)
+		return nil, err
 	}
-	if len(members) == 0 {
+	memberCount := len(members)
+	if memberCount == 0 {
 		return &model.SettlementResult{}, nil
+	}
+
+	// Collect all involved user IDs.
+	idSet := make(map[string]struct{})
+	for _, m := range members {
+		idSet[m.UserID] = struct{}{}
+	}
+	ids := make([]string, 0, len(idSet))
+	for id := range idSet {
+		ids = append(ids, id)
+	}
+	users, _ := s.db.GetUsersByIDs(ctx, ids)
+
+	result, totalJPY := calculateSettlements(records, members, users)
+	return &model.SettlementResult{TotalJPY: totalJPY, Settlements: result}, nil
+}
+
+// Export calculates settlement and creates a Notion summary page.
+func (s *SettlementService) Export(ctx context.Context, tripID string) (*model.ExportSettlementResponse, error) {
+	trip, err := s.db.GetTrip(ctx, tripID)
+	if err != nil {
+		return nil, fmt.Errorf("get trip: %w", err)
 	}
 
 	records, err := s.notion.ListRecords(ctx, trip.NotionDbID)
 	if err != nil {
-		return nil, fmt.Errorf("list records: %w", err)
+		return nil, err
 	}
 
-	// Index members by ID for quick lookup.
-	memberMap := make(map[string]model.Member, len(members))
+	members, err := s.db.ListMembers(ctx, tripID)
+	if err != nil {
+		return nil, err
+	}
+
+	idSet := make(map[string]struct{})
 	for _, m := range members {
-		memberMap[m.ID] = m
+		idSet[m.UserID] = struct{}{}
+	}
+	ids := make([]string, 0, len(idSet))
+	for id := range idSet {
+		ids = append(ids, id)
+	}
+	users, _ := s.db.GetUsersByIDs(ctx, ids)
+
+	settlements, totalJPY := calculateSettlements(records, members, users)
+
+	// Build per-user record lists.
+	recordsByUser := make(map[string][]model.Record)
+	for _, r := range records {
+		recordsByUser[r.PaidByUserID] = append(recordsByUser[r.PaidByUserID], r)
 	}
 
-	// paid[memberID] = total amount this member actually paid
-	// owe[memberID]  = total amount this member should pay (based on splits)
-	paid := make(map[string]int64, len(members))
-	owe := make(map[string]int64, len(members))
+	byUser := make([]notion.UserRecords, 0, len(members))
+	for _, m := range members {
+		u, ok := users[m.UserID]
+		if !ok {
+			continue
+		}
+		recs := recordsByUser[m.UserID]
+		var total int64
+		for _, r := range recs {
+			total += int64(r.AmountJPY)
+		}
+		byUser = append(byUser, notion.UserRecords{User: u, Records: recs, TotalJPY: total})
+	}
 
+	pageURL, err := s.notion.CreateSettlementPage(ctx, trip.NotionPageID, trip.Name, notion.SettlementExportData{
+		Settlements: settlements,
+		ByUser:      byUser,
+		TotalJPY:    totalJPY,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create settlement page: %w", err)
+	}
+
+	return &model.ExportSettlementResponse{NotionPageURL: pageURL}, nil
+}
+
+func calculateSettlements(records []model.Record, members []model.Member, users map[string]model.User) ([]model.SettlementItem, int64) {
+	// paid[userID] = total actually paid
+	// owe[userID]  = total should pay
+	paid := make(map[string]int64)
+	owe := make(map[string]int64)
 	var totalJPY int64
 
 	for _, r := range records {
-		amount := int64(r.AmountJPY)
-		totalJPY += amount
+		amt := int64(r.AmountJPY)
+		totalJPY += amt
+		paid[r.PaidByUserID] += amt
 
-		// Credit the payer.
-		if r.PaidByMemberID != "" {
-			paid[r.PaidByMemberID] += amount
-		}
-
-		// Distribute the cost.
-		if len(r.SplitWith) == 0 {
-			// Not split — only payer bears the cost.
-			if r.PaidByMemberID != "" {
-				owe[r.PaidByMemberID] += amount
+		// AA制: split_with empty → split among all members
+		// 自選: split_with指定成員
+		splitAmong := r.SplitWith
+		if len(splitAmong) == 0 {
+			for _, m := range members {
+				splitAmong = append(splitAmong, m.UserID)
 			}
-		} else {
-			// Split equally among split_with members.
-			share := amount / int64(len(r.SplitWith))
-			remainder := amount - share*int64(len(r.SplitWith))
-			for i, mid := range r.SplitWith {
+		}
+		if len(splitAmong) > 0 {
+			share := amt / int64(len(splitAmong))
+			remainder := amt - share*int64(len(splitAmong))
+			for i, uid := range splitAmong {
 				s := share
 				if i == 0 {
-					s += remainder // first member absorbs rounding
+					s += remainder
 				}
-				owe[mid] += s
+				owe[uid] += s
 			}
 		}
 	}
 
-	// Build per-member summaries.
-	summaries := make([]model.MemberSummary, 0, len(members))
-	balances := make(map[string]int64, len(members))
+	// net balance = paid - owe (positive = others owe you)
+	balances := make([]model.UserBalance, 0, len(users))
 	for _, m := range members {
-		p := paid[m.ID]
-		o := owe[m.ID]
-		diff := p - o
-		balances[m.ID] = diff
-		summaries = append(summaries, model.MemberSummary{
-			Member:  m,
-			PaidJPY: p,
-			OweJPY:  o,
-			DiffJPY: diff,
+		u, ok := users[m.UserID]
+		if !ok {
+			u = model.User{ID: m.UserID, Name: m.UserID}
+		}
+		balances = append(balances, model.UserBalance{
+			User:    u,
+			Balance: paid[m.UserID] - owe[m.UserID],
 		})
 	}
-	sort.Slice(summaries, func(i, j int) bool {
-		return summaries[i].DiffJPY > summaries[j].DiffJPY
-	})
 
-	return &model.SettlementResult{
-		TotalJPY:    totalJPY,
-		ByMember:    summaries,
-		Settlements: memberGreedySettle(balances, memberMap),
-	}, nil
+	return greedySettle(balances), totalJPY
 }
 
-func memberGreedySettle(balances map[string]int64, memberMap map[string]model.Member) []model.MemberSettlement {
+func greedySettle(balances []model.UserBalance) []model.SettlementItem {
 	type entry struct {
-		id     string
+		user   model.User
 		amount int64
 	}
+
 	var creditors, debtors []entry
-	for id, bal := range balances {
-		if bal > 0 {
-			creditors = append(creditors, entry{id, bal})
-		} else if bal < 0 {
-			debtors = append(debtors, entry{id, -bal})
+	for _, b := range balances {
+		if b.Balance > 0 {
+			creditors = append(creditors, entry{b.User, b.Balance})
+		} else if b.Balance < 0 {
+			debtors = append(debtors, entry{b.User, -b.Balance})
 		}
 	}
+
 	sort.Slice(creditors, func(i, j int) bool { return creditors[i].amount > creditors[j].amount })
 	sort.Slice(debtors, func(i, j int) bool { return debtors[i].amount > debtors[j].amount })
 
-	var result []model.MemberSettlement
+	var result []model.SettlementItem
 	i, j := 0, 0
 	for i < len(creditors) && j < len(debtors) {
-		amount := creditors[i].amount
-		if debtors[j].amount < amount {
-			amount = debtors[j].amount
+		amt := creditors[i].amount
+		if debtors[j].amount < amt {
+			amt = debtors[j].amount
 		}
-		result = append(result, model.MemberSettlement{
-			From:      memberMap[debtors[j].id],
-			To:        memberMap[creditors[i].id],
-			AmountJPY: amount,
+		result = append(result, model.SettlementItem{
+			From:      debtors[j].user,
+			To:        creditors[i].user,
+			AmountJPY: amt,
 		})
-		creditors[i].amount -= amount
-		debtors[j].amount -= amount
+		creditors[i].amount -= amt
+		debtors[j].amount -= amt
 		if creditors[i].amount == 0 {
 			i++
 		}

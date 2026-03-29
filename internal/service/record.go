@@ -4,23 +4,31 @@ import (
 	"context"
 	"fmt"
 
-	appdb "github.com/yourname/tabikake/internal/db"
+	"github.com/yourname/tabikake/internal/claude"
 	"github.com/yourname/tabikake/internal/model"
 	"github.com/yourname/tabikake/internal/notion"
+	"github.com/yourname/tabikake/internal/store"
 )
 
-// RecordService handles expense record CRUD.
+// RecordService handles expense record CRUD via Notion.
 type RecordService struct {
-	db     *appdb.DB
+	db     *store.DB
 	notion *notion.Client
+	claude *claude.Client
 }
 
 // NewRecordService creates a new RecordService.
-func NewRecordService(database *appdb.DB, notionClient *notion.Client) *RecordService {
-	return &RecordService{db: database, notion: notionClient}
+func NewRecordService(db *store.DB, notionClient *notion.Client, claudeClient *claude.Client) *RecordService {
+	return &RecordService{db: db, notion: notionClient, claude: claudeClient}
 }
 
-// ListRecords returns all records for the given trip, with PaidByMember populated.
+// ParseReceipt runs Claude Vision OCR on the provided image and returns structured data.
+// The image must be base64-encoded.
+func (s *RecordService) ParseReceipt(ctx context.Context, imageBase64, mediaType string) (*model.ParseReceiptResult, error) {
+	return s.claude.ParseReceipt(ctx, imageBase64, mediaType)
+}
+
+// ListRecords fetches all records for a trip from Notion, enriching each with PaidByUser.
 func (s *RecordService) ListRecords(ctx context.Context, tripID string) ([]model.Record, error) {
 	trip, err := s.db.GetTrip(ctx, tripID)
 	if err != nil {
@@ -32,19 +40,23 @@ func (s *RecordService) ListRecords(ctx context.Context, tripID string) ([]model
 		return nil, err
 	}
 
-	// Load all members once and index by ID.
-	members, _ := s.db.ListMembers(ctx, tripID)
-	memberMap := make(map[string]*model.Member, len(members))
-	for i := range members {
-		m := members[i]
-		memberMap[m.ID] = &m
+	// Collect all user IDs from records.
+	idSet := make(map[string]struct{}, len(records))
+	for _, r := range records {
+		if r.PaidByUserID != "" {
+			idSet[r.PaidByUserID] = struct{}{}
+		}
+	}
+	ids := make([]string, 0, len(idSet))
+	for id := range idSet {
+		ids = append(ids, id)
 	}
 
+	users, _ := s.db.GetUsersByIDs(ctx, ids)
 	for i := range records {
-		if mid := records[i].PaidByMemberID; mid != "" {
-			if m, ok := memberMap[mid]; ok {
-				records[i].PaidByMember = m
-			}
+		if u, ok := users[records[i].PaidByUserID]; ok {
+			u := u
+			records[i].PaidByUser = &u
 		}
 	}
 
@@ -52,55 +64,42 @@ func (s *RecordService) ListRecords(ctx context.Context, tripID string) ([]model
 }
 
 // CreateRecord writes a confirmed expense record to the trip's Notion database.
-// Validates that paid_by_member_id (if provided) belongs to the trip.
 func (s *RecordService) CreateRecord(ctx context.Context, req model.CreateRecordRequest) (*model.Record, error) {
 	trip, err := s.db.GetTrip(ctx, req.TripID)
 	if err != nil {
 		return nil, fmt.Errorf("get trip: %w", err)
 	}
 
-	if req.PaidByMemberID != "" {
-		ok, err := s.db.IsMember(ctx, req.TripID, req.PaidByMemberID)
+	// Validate paid_by_user_id belongs to the trip.
+	if req.PaidByUserID != "" {
+		ok, err := s.db.IsMember(ctx, req.TripID, req.PaidByUserID)
 		if err != nil {
 			return nil, fmt.Errorf("check member: %w", err)
 		}
 		if !ok {
-			return nil, errNotTripMember
-		}
-
-		// Auto-fill name from member record if not provided.
-		if req.PaidByName == "" {
-			if m, err := s.db.GetMember(ctx, req.PaidByMemberID); err == nil {
-				req.PaidByName = m.Name
-				if req.PaidBy == "" {
-					req.PaidBy = m.ID
-				}
-			}
+			return nil, &validationError{"paid_by_user_id is not a member of this trip"}
 		}
 	}
 
 	return s.notion.CreateRecord(ctx, trip.NotionDbID, req)
 }
 
-// UpdateRecord updates an existing record page in Notion.
+// UpdateRecord updates fields on an existing Notion record page.
 func (s *RecordService) UpdateRecord(ctx context.Context, pageID string, req model.UpdateRecordRequest) (*model.Record, error) {
 	return s.notion.UpdateRecord(ctx, pageID, req)
 }
 
-// DeleteRecord archives the Notion page for the given record.
+// DeleteRecord archives a Notion record page.
 func (s *RecordService) DeleteRecord(ctx context.Context, pageID string) error {
 	return s.notion.DeleteRecord(ctx, pageID)
 }
 
-// errNotTripMember is returned when paid_by_member_id does not belong to the trip.
-var errNotTripMember = &memberValidationError{"paid_by_member_id is not a member of this trip"}
+type validationError struct{ msg string }
 
-type memberValidationError struct{ msg string }
+func (e *validationError) Error() string { return e.msg }
 
-func (e *memberValidationError) Error() string { return e.msg }
-
-// IsMemberValidationError reports whether err is a member validation error.
-func IsMemberValidationError(err error) bool {
-	_, ok := err.(*memberValidationError)
+// IsValidationError reports whether err is a field-validation error.
+func IsValidationError(err error) bool {
+	_, ok := err.(*validationError)
 	return ok
 }

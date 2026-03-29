@@ -7,67 +7,43 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/yourname/tabikake/internal/db"
+	"github.com/google/uuid"
+
 	"github.com/yourname/tabikake/internal/model"
 	"github.com/yourname/tabikake/internal/notion"
+	"github.com/yourname/tabikake/internal/store"
 )
 
-// TripService handles trip creation and retrieval.
+// TripService handles trip CRUD and membership.
 type TripService struct {
-	db     *db.DB
+	db     *store.DB
 	notion *notion.Client
 }
 
 // NewTripService creates a new TripService.
-func NewTripService(database *db.DB, notionClient *notion.Client) *TripService {
-	return &TripService{db: database, notion: notionClient}
+func NewTripService(db *store.DB, notionClient *notion.Client) *TripService {
+	return &TripService{db: db, notion: notionClient}
 }
 
-// ListTrips returns all trips from SQLite.
-func (s *TripService) ListTrips(ctx context.Context) ([]model.Trip, error) {
-	return s.db.ListTrips(ctx)
+// ListTrips returns all trips the user is a member of.
+func (s *TripService) ListTrips(ctx context.Context, userID string) ([]model.Trip, error) {
+	trips, err := s.db.ListTripsByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if trips == nil {
+		trips = []model.Trip{}
+	}
+	return trips, nil
 }
 
-// GetTrip returns a single trip by ID from SQLite.
+// GetTrip returns a single trip by ID (caller must verify membership).
 func (s *TripService) GetTrip(ctx context.Context, id string) (*model.Trip, error) {
 	return s.db.GetTrip(ctx, id)
 }
 
-// IsMember returns true if memberID belongs to the given trip.
-func (s *TripService) IsMember(ctx context.Context, tripID, memberID string) (bool, error) {
-	return s.db.IsMember(ctx, tripID, memberID)
-}
-
-// GetJoinInfo returns public trip info for the given invite code (no auth required).
-func (s *TripService) GetJoinInfo(ctx context.Context, inviteCode string) (*model.JoinInfoResponse, error) {
-	trip, err := s.db.GetTripByInviteCode(ctx, inviteCode)
-	if err != nil {
-		return nil, err
-	}
-
-	owner, err := s.db.GetTripOwner(ctx, trip.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	count, err := s.db.CountMembers(ctx, trip.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	return &model.JoinInfoResponse{
-		TripName:    trip.Name,
-		MemberCount: count,
-		OwnerName:   owner.Name,
-	}, nil
-}
-
-// CreateTrip:
-//  1. Creates a Notion page under NOTION_ROOT_PAGE_ID
-//  2. Creates a Records database under that page
-//  3. Saves the trip metadata to SQLite (with auto-generated invite code)
-//  4. Creates an owner Member record in SQLite
-func (s *TripService) CreateTrip(ctx context.Context, req model.CreateTripRequest) (*model.CreateTripResponse, error) {
+// CreateTrip creates a Notion page + DB, persists to SQLite, and adds the user as owner.
+func (s *TripService) CreateTrip(ctx context.Context, userID string, req model.CreateTripRequest) (*model.Trip, error) {
 	pageID, err := s.notion.CreateTripPage(ctx, req.Name)
 	if err != nil {
 		return nil, fmt.Errorf("create notion page: %w", err)
@@ -78,23 +54,21 @@ func (s *TripService) CreateTrip(ctx context.Context, req model.CreateTripReques
 		return nil, fmt.Errorf("create records database: %w", err)
 	}
 
-	tripID, err := newID()
-	if err != nil {
-		return nil, err
-	}
-
 	inviteCode, err := newInviteCode()
 	if err != nil {
 		return nil, err
 	}
 
 	trip := model.Trip{
-		ID:           tripID,
+		ID:           uuid.NewString(),
 		Name:         req.Name,
-		StartDate:    req.StartDate,
-		EndDate:      req.EndDate,
+		OwnerID:      userID,
 		NotionPageID: pageID,
 		NotionDbID:   dbID,
+		BudgetJPY:    req.BudgetJPY,
+		BudgetSuica:  req.BudgetSuica,
+		StartDate:    req.StartDate,
+		EndDate:      req.EndDate,
 		InviteCode:   inviteCode,
 	}
 
@@ -102,37 +76,76 @@ func (s *TripService) CreateTrip(ctx context.Context, req model.CreateTripReques
 		return nil, fmt.Errorf("save trip: %w", err)
 	}
 
-	ownerID, err := newID()
+	// Auto-add creator as owner member.
+	owner := model.Member{
+		ID:      uuid.NewString(),
+		TripID:  trip.ID,
+		UserID:  userID,
+		IsOwner: true,
+	}
+	if err := s.db.InsertMember(ctx, owner); err != nil {
+		return nil, fmt.Errorf("add owner member: %w", err)
+	}
+
+	return &trip, nil
+}
+
+// UpdateTrip updates mutable trip fields (owner only — enforced in handler).
+func (s *TripService) UpdateTrip(ctx context.Context, id string, req model.UpdateTripRequest) (*model.Trip, error) {
+	if err := s.db.UpdateTrip(ctx, id, req); err != nil {
+		return nil, err
+	}
+	return s.db.GetTrip(ctx, id)
+}
+
+// DeleteTrip removes a trip from SQLite (cascades to members).
+func (s *TripService) DeleteTrip(ctx context.Context, id string) error {
+	return s.db.DeleteTrip(ctx, id)
+}
+
+// GetJoinInfo returns public preview info for a trip by invite code.
+func (s *TripService) GetJoinInfo(ctx context.Context, inviteCode string) (*model.JoinInfoResponse, error) {
+	trip, err := s.db.GetTripByInviteCode(ctx, inviteCode)
+	if err != nil {
+		return nil, err
+	}
+	ownerName, err := s.db.GetTripOwnerName(ctx, trip.ID)
+	if err != nil {
+		return nil, err
+	}
+	count, err := s.db.CountMembers(ctx, trip.ID)
+	if err != nil {
+		return nil, err
+	}
+	return &model.JoinInfoResponse{
+		TripName:    trip.Name,
+		MemberCount: count,
+		OwnerName:   ownerName,
+	}, nil
+}
+
+// JoinTrip adds userID to the trip identified by invite code.
+func (s *TripService) JoinTrip(ctx context.Context, userID string, req model.JoinTripRequest) (*model.JoinTripResponse, error) {
+	trip, err := s.db.GetTripByInviteCode(ctx, req.InviteCode)
 	if err != nil {
 		return nil, err
 	}
 
-	color := req.OwnerAvatarColor
-	if color == "" {
-		color = "#F59E0B"
+	member := model.Member{
+		ID:      uuid.NewString(),
+		TripID:  trip.ID,
+		UserID:  userID,
+		IsOwner: false,
+	}
+	if err := s.db.InsertMember(ctx, member); err != nil {
+		if err == store.ErrConflict {
+			// Already a member — return existing trip info anyway.
+			return &model.JoinTripResponse{Trip: *trip, Member: member}, nil
+		}
+		return nil, fmt.Errorf("join trip: %w", err)
 	}
 
-	owner := model.Member{
-		ID:          ownerID,
-		TripID:      tripID,
-		Name:        req.OwnerName,
-		AvatarColor: color,
-		IsOwner:     true,
-	}
-
-	if err := s.db.InsertMember(ctx, owner); err != nil {
-		return nil, fmt.Errorf("save owner member: %w", err)
-	}
-
-	return &model.CreateTripResponse{Trip: trip, Owner: owner}, nil
-}
-
-func newID() (string, error) {
-	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("generate id: %w", err)
-	}
-	return hex.EncodeToString(b), nil
+	return &model.JoinTripResponse{Trip: *trip, Member: member}, nil
 }
 
 const inviteChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -148,3 +161,14 @@ func newInviteCode() (string, error) {
 	}
 	return string(code), nil
 }
+
+// newHexID generates a random 8-byte hex string (kept for compatibility).
+func newHexID() (string, error) {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("generate id: %w", err)
+	}
+	return hex.EncodeToString(b), nil
+}
+
+var _ = newHexID // suppress unused warning

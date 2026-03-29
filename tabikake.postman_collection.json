@@ -2,6 +2,7 @@
 	"info": {
 		"_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 		"name": "Tabikake API",
+		"description": "Auth uses httpOnly cookies — Postman's cookie jar handles this automatically. After the OAuth callback, all requests to localhost:8080 include the auth_token cookie.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -28,54 +29,76 @@
 			"name": "Auth",
 			"item": [
 				{
-					"name": "POST /auth/notion/callback",
+					"name": "GET /auth/notion/url",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/auth/notion/url",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["auth", "notion", "url"]
+						},
+						"description": "Returns the Notion OAuth authorization URL. Open it in a browser to start the OAuth flow."
+					}
+				},
+				{
+					"name": "GET /auth/notion/callback",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"type": "text/javascript",
 								"exec": [
-									"var res = pm.response.json();",
-									"if (res.access_token) {",
-									"  pm.collectionVariables.set('token', res.access_token);",
-									"  console.log('Token saved');",
-									"}"
+									"// Postman cookie jar automatically captures the auth_token cookie",
+									"// from the Set-Cookie header in the redirect response.",
+									"// No manual steps needed — subsequent requests will send the cookie."
 								]
 							}
 						}
 					],
 					"request": {
-						"method": "POST",
-						"header": [
-							{ "key": "Content-Type", "value": "application/json" }
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n\t\"code\": \"YOUR_NOTION_OAUTH_CODE\"\n}",
-							"options": { "raw": { "language": "json" } }
-						},
+						"method": "GET",
+						"header": [],
 						"url": {
-							"raw": "http://localhost:8080/auth/notion/callback",
+							"raw": "http://localhost:8080/auth/notion/callback?code={{oauthCode}}",
 							"protocol": "http",
 							"host": ["localhost"],
 							"port": "8080",
-							"path": ["auth", "notion", "callback"]
-						}
+							"path": ["auth", "notion", "callback"],
+							"query": [
+								{ "key": "code", "value": "{{oauthCode}}", "description": "Paste the code= value from Notion's redirect URL" }
+							]
+						},
+						"description": "Exchanges the OAuth code for a session. Sets auth_token cookie. Paste the `code` param from Notion's redirect URL into the oauthCode variable."
 					}
 				},
 				{
 					"name": "GET /auth/me",
 					"request": {
 						"method": "GET",
-						"header": [
-							{ "key": "Authorization", "value": "Bearer {{token}}" }
-						],
+						"header": [],
 						"url": {
 							"raw": "http://localhost:8080/auth/me",
 							"protocol": "http",
 							"host": ["localhost"],
 							"port": "8080",
 							"path": ["auth", "me"]
+						}
+					}
+				},
+				{
+					"name": "POST /auth/logout",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/auth/logout",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["auth", "logout"]
 						}
 					}
 				}
@@ -88,9 +111,7 @@
 					"name": "GET /trips",
 					"request": {
 						"method": "GET",
-						"header": [
-							{ "key": "Authorization", "value": "Bearer {{token}}" }
-						],
+						"header": [],
 						"url": {
 							"raw": "http://localhost:8080/trips",
 							"protocol": "http",
@@ -109,17 +130,13 @@
 								"type": "text/javascript",
 								"exec": [
 									"var res = pm.response.json();",
-									"if (res.trip && res.trip.id) {",
-									"  pm.collectionVariables.set('tripId', res.trip.id);",
-									"  console.log('Trip ID saved:', res.trip.id);",
+									"if (res.id) {",
+									"  pm.collectionVariables.set('tripId', res.id);",
+									"  console.log('Trip ID saved:', res.id);",
 									"}",
-									"if (res.trip && res.trip.invite_code) {",
-									"  pm.collectionVariables.set('inviteCode', res.trip.invite_code);",
-									"  console.log('Invite code saved:', res.trip.invite_code);",
-									"}",
-									"if (res.owner && res.owner.id) {",
-									"  pm.collectionVariables.set('memberId', res.owner.id);",
-									"  console.log('Owner member ID saved:', res.owner.id);",
+									"if (res.invite_code) {",
+									"  pm.collectionVariables.set('inviteCode', res.invite_code);",
+									"  console.log('Invite code saved:', res.invite_code);",
 									"}"
 								]
 							}
@@ -128,12 +145,11 @@
 					"request": {
 						"method": "POST",
 						"header": [
-							{ "key": "Authorization", "value": "Bearer {{token}}" },
 							{ "key": "Content-Type", "value": "application/json" }
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n\t\"name\": \"日本中部北陸之旅\",\n\t\"start_date\": \"2026-03-20\",\n\t\"end_date\": \"2026-03-30\",\n\t\"owner_name\": \"劉冠呈\",\n\t\"owner_avatar_color\": \"#F59E0B\"\n}",
+							"raw": "{\n\t\"name\": \"日本中部北陸之旅\",\n\t\"start_date\": \"2026-03-20\",\n\t\"end_date\": \"2026-03-30\",\n\t\"budget_jpy\": 150000,\n\t\"budget_suica\": 10000\n}",
 							"options": { "raw": { "language": "json" } }
 						},
 						"url": {
@@ -149,10 +165,7 @@
 					"name": "GET /trips/:id",
 					"request": {
 						"method": "GET",
-						"header": [
-							{ "key": "Authorization", "value": "Bearer {{token}}" },
-							{ "key": "X-Member-ID", "value": "{{memberId}}", "description": "optional — populates is_member field" }
-						],
+						"header": [],
 						"url": {
 							"raw": "http://localhost:8080/trips/{{tripId}}",
 							"protocol": "http",
@@ -160,6 +173,43 @@
 							"port": "8080",
 							"path": ["trips", "{{tripId}}"]
 						}
+					}
+				},
+				{
+					"name": "PATCH /trips/:id",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"name\": \"日本中部北陸之旅（更新）\",\n\t\"end_date\": \"2026-04-01\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "http://localhost:8080/trips/{{tripId}}",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["trips", "{{tripId}}"]
+						},
+						"description": "Owner only. All fields are optional."
+					}
+				},
+				{
+					"name": "DELETE /trips/:id",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/trips/{{tripId}}",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["trips", "{{tripId}}"]
+						},
+						"description": "Owner only."
 					}
 				},
 				{
@@ -191,10 +241,6 @@
 									"if (res.trip && res.trip.id) {",
 									"  pm.collectionVariables.set('tripId', res.trip.id);",
 									"  console.log('Trip ID saved:', res.trip.id);",
-									"}",
-									"if (res.member && res.member.id) {",
-									"  pm.collectionVariables.set('memberId', res.member.id);",
-									"  console.log('Member ID saved:', res.member.id);",
 									"}"
 								]
 							}
@@ -203,12 +249,11 @@
 					"request": {
 						"method": "POST",
 						"header": [
-							{ "key": "Authorization", "value": "Bearer {{token}}" },
 							{ "key": "Content-Type", "value": "application/json" }
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n\t\"invite_code\": \"{{inviteCode}}\",\n\t\"name\": \"陳小明\",\n\t\"avatar_color\": \"#10B981\"\n}",
+							"raw": "{\n\t\"invite_code\": \"{{inviteCode}}\"\n}",
 							"options": { "raw": { "language": "json" } }
 						},
 						"url": {
@@ -217,7 +262,8 @@
 							"host": ["localhost"],
 							"port": "8080",
 							"path": ["trips", "join"]
-						}
+						},
+						"description": "Joins the trip as the authenticated user. No extra fields needed — identity comes from the session cookie."
 					}
 				}
 			]
@@ -229,10 +275,7 @@
 					"name": "GET /trips/:id/members",
 					"request": {
 						"method": "GET",
-						"header": [
-							{ "key": "Authorization", "value": "Bearer {{token}}" },
-							{ "key": "X-Member-ID", "value": "{{memberId}}" }
-						],
+						"header": [],
 						"url": {
 							"raw": "http://localhost:8080/trips/{{tripId}}/members",
 							"protocol": "http",
@@ -243,75 +286,18 @@
 					}
 				},
 				{
-					"name": "POST /trips/:id/members",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"var res = pm.response.json();",
-									"if (res.id) {",
-									"  pm.collectionVariables.set('newMemberId', res.id);",
-									"  console.log('New member ID saved:', res.id);",
-									"}"
-								]
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{ "key": "Authorization", "value": "Bearer {{token}}" },
-							{ "key": "X-Member-ID", "value": "{{memberId}}" },
-							{ "key": "Content-Type", "value": "application/json" }
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n\t\"name\": \"王小美\",\n\t\"avatar_color\": \"#6366F1\"\n}",
-							"options": { "raw": { "language": "json" } }
-						},
-						"url": {
-							"raw": "http://localhost:8080/trips/{{tripId}}/members",
-							"protocol": "http",
-							"host": ["localhost"],
-							"port": "8080",
-							"path": ["trips", "{{tripId}}", "members"]
-						}
-					}
-				},
-				{
-					"name": "DELETE /trips/:id/members/:member_id",
+					"name": "DELETE /trips/:id/members/:user_id",
 					"request": {
 						"method": "DELETE",
-						"header": [
-							{ "key": "Authorization", "value": "Bearer {{token}}" },
-							{ "key": "X-Member-ID", "value": "{{memberId}}", "description": "must be trip owner" }
-						],
+						"header": [],
 						"url": {
-							"raw": "http://localhost:8080/trips/{{tripId}}/members/{{newMemberId}}",
+							"raw": "http://localhost:8080/trips/{{tripId}}/members/{{targetUserId}}",
 							"protocol": "http",
 							"host": ["localhost"],
 							"port": "8080",
-							"path": ["trips", "{{tripId}}", "members", "{{newMemberId}}"]
-						}
-					}
-				},
-				{
-					"name": "GET /trips/:id/settlement",
-					"request": {
-						"method": "GET",
-						"header": [
-							{ "key": "Authorization", "value": "Bearer {{token}}" },
-							{ "key": "X-Member-ID", "value": "{{memberId}}" }
-						],
-						"url": {
-							"raw": "http://localhost:8080/trips/{{tripId}}/settlement",
-							"protocol": "http",
-							"host": ["localhost"],
-							"port": "8080",
-							"path": ["trips", "{{tripId}}", "settlement"]
-						}
+							"path": ["trips", "{{tripId}}", "members", "{{targetUserId}}"]
+						},
+						"description": "Owner only. Uses Notion user_id (not member row ID)."
 					}
 				}
 			]
@@ -324,7 +310,6 @@
 					"request": {
 						"method": "POST",
 						"header": [
-							{ "key": "Authorization", "value": "Bearer {{token}}" },
 							{ "key": "Content-Type", "value": "application/json" }
 						],
 						"body": {
@@ -345,9 +330,7 @@
 					"name": "POST /parse (file upload)",
 					"request": {
 						"method": "POST",
-						"header": [
-							{ "key": "Authorization", "value": "Bearer {{token}}" }
-						],
+						"header": [],
 						"body": {
 							"mode": "formdata",
 							"formdata": [
@@ -372,10 +355,7 @@
 					"name": "GET /records",
 					"request": {
 						"method": "GET",
-						"header": [
-							{ "key": "Authorization", "value": "Bearer {{token}}" },
-							{ "key": "X-Member-ID", "value": "{{memberId}}" }
-						],
+						"header": [],
 						"url": {
 							"raw": "http://localhost:8080/records?trip_id={{tripId}}",
 							"protocol": "http",
@@ -408,12 +388,11 @@
 					"request": {
 						"method": "POST",
 						"header": [
-							{ "key": "Authorization", "value": "Bearer {{token}}" },
 							{ "key": "Content-Type", "value": "application/json" }
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n\t\"trip_id\": \"{{tripId}}\",\n\t\"store\": \"すき家\",\n\t\"date\": \"2026-03-27\",\n\t\"amount_jpy\": 650,\n\t\"amount_twd\": 145,\n\t\"tax_jpy\": 59,\n\t\"category\": \"餐飲\",\n\t\"payment\": \"現金\",\n\t\"paid_by_member_id\": \"{{memberId}}\",\n\t\"split_with\": [\"{{memberId}}\"],\n\t\"items\": [\n\t\t{ \"name_jp\": \"牛丼\", \"name_zh\": \"牛肉飯\", \"price\": 650 }\n\t]\n}",
+							"raw": "{\n\t\"trip_id\": \"{{tripId}}\",\n\t\"store_name_zh\": \"吉野家\",\n\t\"store_name_jp\": \"すき家\",\n\t\"date\": \"2026-03-27\",\n\t\"amount_jpy\": 650,\n\t\"tax_jpy\": 59,\n\t\"category\": \"餐飲\",\n\t\"payment\": \"現金\",\n\t\"paid_by_user_id\": \"\",\n\t\"split_with\": [],\n\t\"items\": [\n\t\t{ \"name_zh\": \"牛肉飯\", \"price\": 650 }\n\t]\n}",
 							"options": { "raw": { "language": "json" } }
 						},
 						"url": {
@@ -422,7 +401,8 @@
 							"host": ["localhost"],
 							"port": "8080",
 							"path": ["records"]
-						}
+						},
+						"description": "paid_by_user_id defaults to the logged-in user if empty. split_with empty = AA制 (all members)."
 					}
 				},
 				{
@@ -430,12 +410,11 @@
 					"request": {
 						"method": "PATCH",
 						"header": [
-							{ "key": "Authorization", "value": "Bearer {{token}}" },
 							{ "key": "Content-Type", "value": "application/json" }
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n\t\"amount_jpy\": 720,\n\t\"tax_jpy\": 65,\n\t\"items\": [\n\t\t{ \"name_jp\": \"牛丼(並)\", \"name_zh\": \"牛肉飯(普通)\", \"price\": 720 }\n\t]\n}",
+							"raw": "{\n\t\"amount_jpy\": 720,\n\t\"tax_jpy\": 65,\n\t\"items\": [\n\t\t{ \"name_zh\": \"牛肉飯(普通)\", \"price\": 720 }\n\t]\n}",
 							"options": { "raw": { "language": "json" } }
 						},
 						"url": {
@@ -451,9 +430,7 @@
 					"name": "DELETE /records/:id",
 					"request": {
 						"method": "DELETE",
-						"header": [
-							{ "key": "Authorization", "value": "Bearer {{token}}" }
-						],
+						"header": [],
 						"url": {
 							"raw": "http://localhost:8080/records/{{recordId}}",
 							"protocol": "http",
@@ -472,10 +449,7 @@
 					"name": "GET /dashboard/:trip_id",
 					"request": {
 						"method": "GET",
-						"header": [
-							{ "key": "Authorization", "value": "Bearer {{token}}" },
-							{ "key": "X-Member-ID", "value": "{{memberId}}" }
-						],
+						"header": [],
 						"url": {
 							"raw": "http://localhost:8080/dashboard/{{tripId}}",
 							"protocol": "http",
@@ -488,34 +462,46 @@
 			]
 		},
 		{
-			"name": "Split",
+			"name": "Settlement",
 			"item": [
 				{
-					"name": "POST /split/export/:trip_id",
+					"name": "GET /trips/:id/settlement",
 					"request": {
-						"method": "POST",
-						"header": [
-							{ "key": "Authorization", "value": "Bearer {{token}}" },
-							{ "key": "X-Member-ID", "value": "{{memberId}}" }
-						],
+						"method": "GET",
+						"header": [],
 						"url": {
-							"raw": "http://localhost:8080/split/export/{{tripId}}",
+							"raw": "http://localhost:8080/trips/{{tripId}}/settlement",
 							"protocol": "http",
 							"host": ["localhost"],
 							"port": "8080",
-							"path": ["split", "export", "{{tripId}}"]
-						}
+							"path": ["trips", "{{tripId}}", "settlement"]
+						},
+						"description": "Calculate settlement without writing to Notion."
+					}
+				},
+				{
+					"name": "POST /trips/:id/settlement/export",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/trips/{{tripId}}/settlement/export",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["trips", "{{tripId}}", "settlement", "export"]
+						},
+						"description": "Calculate settlement and create a summary page in the trip's Notion parent page."
 					}
 				}
 			]
 		}
 	],
 	"variable": [
-		{ "key": "token",       "value": "", "type": "string" },
-		{ "key": "tripId",      "value": "", "type": "string" },
-		{ "key": "inviteCode",  "value": "", "type": "string" },
-		{ "key": "memberId",    "value": "", "type": "string" },
-		{ "key": "newMemberId", "value": "", "type": "string" },
-		{ "key": "recordId",    "value": "", "type": "string" }
+		{ "key": "oauthCode",    "value": "", "type": "string", "description": "Paste the code= value from Notion's OAuth redirect URL" },
+		{ "key": "tripId",       "value": "", "type": "string" },
+		{ "key": "inviteCode",   "value": "", "type": "string" },
+		{ "key": "targetUserId", "value": "", "type": "string", "description": "Notion user_id of the member to remove" },
+		{ "key": "recordId",     "value": "", "type": "string" }
 	]
 }
